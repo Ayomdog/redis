@@ -4,6 +4,8 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.collection.ListUtil;
 import cn.hutool.core.util.TypeUtil;
+import cn.hutool.json.JSONException;
+import cn.hutool.json.JSONUtil;
 import com.hmdp.dto.Result;
 import com.hmdp.entity.ShopType;
 import com.hmdp.mapper.ShopTypeMapper;
@@ -33,13 +35,17 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
     @Resource
     private StringRedisTemplate stringRedisTemplate;
     @Override
-    public Result queryTypeList() {
+    public Result queryTypeList() throws JSONException {
         String key = RedisConstants.CACHE_SHOP_TYPE;
         //从redis中获取商铺类型数据
         List<String> list = stringRedisTemplate.opsForList().range(key,0, -1);
         //存在直接返回商铺类型数据
         if(list != null && list.size() > 0){
-            List<ShopType> shopTypes = BeanUtil.copyToList(list, ShopType.class);
+            //List<ShopType> shopTypes = BeanUtil.copyToList(list, ShopType.class);
+            List<ShopType> shopTypes = list.stream()
+                    .map(item -> JSONUtil.toBean(item, ShopType.class))
+                    .collect(Collectors.toList());
+            System.out.println(shopTypes);
             return Result.ok(shopTypes);
         }
         //不存在,从数据库中查询数据
@@ -50,9 +56,9 @@ public class ShopTypeServiceImpl extends ServiceImpl<ShopTypeMapper, ShopType> i
         }
         //存在,将数据写入redis中
         List<String> stringList = shopTypes.stream()
-                .map(ShopType::getName)  // 使用 getName 方法
+                .map(shopType -> JSONUtil.toJsonStr(shopType))  // 使用 getName 方法
                 .collect(Collectors.toList());
-        stringRedisTemplate.opsForList().leftPushAll(key, stringList);
+        stringRedisTemplate.opsForList().rightPushAll(key, stringList);
         //返回商铺类型数据
         return Result.ok(shopTypes);
     }
